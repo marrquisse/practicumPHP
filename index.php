@@ -3,7 +3,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Крок 2: Оголосити масив даних свого домену (Варіант 6)
+// Крок 2: Оголосити масив даних свого домену 
 $recipes = [
     ['title' => 'Яєчня з беконом', 'cookTimeMin' => 10, 'servings' => 1, 'difficulty' => 'Легко'],
     ['title' => 'Борщ український', 'cookTimeMin' => 120, 'servings' => 6, 'difficulty' => 'Складно'],
