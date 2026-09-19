@@ -12,7 +12,6 @@ class Cookbook {
         return $this->recipes;
     }
 
-    // Пошук за інгредієнтом
     public function findByIngredient(string $search): array {
         $found = [];
         foreach ($this->recipes as $recipe) {
@@ -26,7 +25,6 @@ class Cookbook {
         return $found;
     }
 
-    // Пошук найшвидшого рецепта
     public function shortestCookTime(): ?Recipe {
         if (empty($this->recipes)) return null;
         

@@ -1,5 +1,4 @@
 <?php
-// classes/VeganRecipe.php
 
 class VeganRecipe extends Recipe {
     private string $substitutions;

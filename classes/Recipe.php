@@ -1,5 +1,4 @@
 <?php
-// classes/Recipe.php
 
 class Recipe {
     protected string $title;
@@ -19,7 +18,6 @@ class Recipe {
                "<small>Інгредієнти: {$ingList}</small>";
     }
 
-    // Гетери для використання в класі-менеджері
     public function getIngredients(): array { return $this->ingredients; }
     public function getCookTimeMin(): int { return $this->cookTimeMin; }
 }
