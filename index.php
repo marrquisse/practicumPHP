@@ -2,216 +2,264 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Базовий масив рецептів (Практична 1)
-$recipes = [
-    ['title' => 'Яєчня з беконом', 'cookTimeMin' => 10, 'servings' => 1, 'difficulty' => 'Легко'],
-    ['title' => 'Борщ український', 'cookTimeMin' => 120, 'servings' => 6, 'difficulty' => 'Складно'],
-    ['title' => 'Салат Цезар', 'cookTimeMin' => 20, 'servings' => 2, 'difficulty' => 'Легко']
-];
+require_once 'lib/functions.php';
+require_once 'classes/Recipe.php';
+require_once 'classes/VeganRecipe.php';
+require_once 'classes/Cookbook.php';
 
-// Обробка форми (Практична 2)
+$cookbook = new Cookbook();
+$cookbook->addRecipe(new Recipe('Яєчня з беконом', ['яйця', 'бекон', 'сіль', 'перець'], 10));
+$cookbook->addRecipe(new Recipe('Борщ український', ['буряк', 'картопля', 'м\'ясо', 'капуста', 'морква'], 120));
+$cookbook->addRecipe(new VeganRecipe('Салат Цезар (Веган)', ['тофу', 'салат айсберг', 'веганський майонез', 'сухарики'], 20, 'Тофу замість курки, соя замість яєць'));
+
 $errors = [];
 $successMessage = '';
 
-// Перевіряємо, чи форму було надіслано методом POST[cite: 2]
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Отримуємо дані з форми[cite: 2]
     $newTitle = trim($_POST['title'] ?? '');
-    $newIngredients = trim($_POST['ingredients'] ?? '');
+    $newIngredientsStr = trim($_POST['ingredients'] ?? '');
     $newCookTime = (int)($_POST['cookTimeMin'] ?? 0);
-    $unit = $_POST['unit'] ?? 'g';
+    $isVegan = isset($_POST['is_vegan']);
+    $substitutions = trim($_POST['substitutions'] ?? '');
 
-    // Серверна валідація[cite: 2]
-    if ($newTitle === '') {
-        $errors['title'] = 'Назва рецепта обов\'язкова.';
-    }
-    // Перевірка, щоб час був більше 0[cite: 2]
-    if ($newCookTime <= 0) {
-        $errors['cookTimeMin'] = 'Час приготування має бути більше 0.';
-    }
-    // Перевірка, щоб інгредієнти не були порожніми[cite: 2]
-    if ($newIngredients === '') {
-        $errors['ingredients'] = 'Додайте хоча б один інгредієнт.';
-    }
+    if ($newTitle === '') $errors['title'] = 'Назва обов\'язкова.';
+    if ($newCookTime <= 0) $errors['cookTimeMin'] = 'Час має бути більше 0.';
+    if ($newIngredientsStr === '') $errors['ingredients'] = 'Додайте інгредієнти.';
 
-    // Якщо помилок немає, виводимо підтвердження[cite: 2]
     if (empty($errors)) {
-        $successMessage = "Рецепт «" . htmlspecialchars($newTitle) . "» успішно додано!";
+        $ingredientsArr = explode(',', $newIngredientsStr);
         
-        // Додаємо новий рецепт у наш масив, щоб він з'явився на сторінці
-        $recipes[] = [
-            'title' => htmlspecialchars($newTitle),
-            'cookTimeMin' => $newCookTime,
-            'servings' => 2, // ставимо за замовчуванням
-            'difficulty' => 'Середньо' // ставимо за замовчуванням
-        ];
-
-        // Очищаємо поля форми після успіху
-        $newTitle = $newIngredients = '';
+        if ($isVegan) {
+            $newRecipe = new VeganRecipe($newTitle, $ingredientsArr, $newCookTime, $substitutions);
+        } else {
+            $newRecipe = new Recipe($newTitle, $ingredientsArr, $newCookTime);
+        }
+        
+        $cookbook->addRecipe($newRecipe);
+        $successMessage = "Рецепт успішно збережено!";
+        
+        $newTitle = $newIngredientsStr = $substitutions = '';
         $newCookTime = 0;
     }
 }
-
-// Розрахунок середнього часу
-$totalTime = 0;
-foreach ($recipes as $recipe) {
-    $totalTime += $recipe['cookTimeMin'];
-}
-$averageTime = count($recipes) > 0 ? round($totalTime / count($recipes), 1) : 0;
 ?>
 
 <!DOCTYPE html>
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>Кулінарна книга</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Моя Кулінарна Книга</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-  
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f7f9fc;
-            color: #333;
-            margin: 0;
-            padding: 20px;
+        :root {
+            --primary: #6b46c1; 
+            --accent: #ecc94b;
+            --accent-hover: #d69e2e;
+            --vegan: #48bb78;
+            --bg: #f7fafc;
+            --card-bg: #ffffff;
+            --text-main: #2d3748;
+            --text-muted: #718096;
+            --border: #e2e8f0;
         }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        h1, h2 { color: #2c3e50; }
-        
 
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9em; }
-        input[type="text"], input[type="number"], select, textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box; 
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
         }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
+
+        .header {
+            background-color: var(--card-bg);
+            padding: 24px 0;
+            border-bottom: 1px solid var(--border);
+            text-align: center;
+            margin-bottom: 40px;
         }
-        button:hover { background-color: #45a049; }
- 
-        .error-text { color: red; font-size: 0.85em; display: block; margin-top: 5px; }
-        .success-alert { background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin-bottom: 15px; }
+
+        .header h1 {
+            margin: 0;
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 2rem;
+            letter-spacing: -0.5px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 40px;
+        }
+
+        @media (max-width: 850px) {
+            .container { grid-template-columns: 1fr; }
+        }
+
+        /* Форма (Мінімалізм) */
+        .form-panel {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            height: fit-content;
+        }
+
+        .form-panel h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+            color: var(--text-main);
+            margin-bottom: 24px;
+        }
+
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 500; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-main); }
         
+        input[type="text"], input[type="number"], textarea {
+            width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px;
+            box-sizing: border-box; font-family: 'Inter', sans-serif; font-size: 0.95rem;
+            transition: all 0.2s ease; background-color: #fcfcfc;
+        }
+        
+        input:focus, textarea:focus { 
+            border-color: var(--primary); 
+            outline: none; 
+            box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1); 
+            background-color: #fff;
+        }
+        
+        .checkbox-group { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;}
+        .checkbox-group input { width: 18px; height: 18px; accent-color: var(--primary); }
+        
+        button {
+            width: 100%; background-color: var(--accent); color: #1a202c; border: none;
+            padding: 14px; border-radius: 8px; cursor: pointer; font-weight: 700;
+            font-size: 1rem; transition: background-color 0.2s;
+        }
+        button:hover { background-color: var(--accent-hover); }
+
+        .success-alert { background-color: #f0fff4; color: #276749; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-size: 0.95rem; border: 1px solid #c6f6d5;}
+
+        /* Сітка рецептів */
+        .recipes-header {
+            font-size: 1.25rem;
+            margin-top: 0;
+            margin-bottom: 24px;
+            color: var(--text-main);
+        }
+
+        .recipes-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px;
+        }
 
         .recipe-card {
-            border: 1px solid #eee;
-            padding: 10px 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            background-color: #fafafa;
+            background: var(--card-bg); padding: 24px; border-radius: 16px;
+            border: 1px solid var(--border);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+            overflow: hidden;
         }
-        .badge {
-            background-color: #28a745;
+        
+        .recipe-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+            background-color: var(--primary);
+        }
+
+        .recipe-card.vegan-card::before { background-color: var(--vegan); }
+
+        .recipe-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+
+        .recipe-card b { font-size: 1.15rem; color: var(--text-main); display: block; margin-bottom: 12px; }
+        .recipe-card small { color: var(--text-muted); display: block; margin-top: 16px; line-height: 1.5; font-size: 0.85rem;}
+
+        /* Статистика */
+        .stats-panel {
+            background-color: var(--primary);
             color: white;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            margin-left: 10px;
+            padding: 24px; border-radius: 16px; margin-top: 40px;
+            grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
         }
-        .aggregate { font-weight: bold; margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 5px; text-align: center; }
+        .stats-panel h3 { margin: 0; font-size: 1.2rem; font-weight: 500; opacity: 0.9;}
+        .stats-content { font-size: 1.1rem; font-weight: 700; text-align: right;}
+        
+        /* Корегування тексту всередині блоку статистики */
+        .stats-content b { font-size: 1.2rem; display: block; }
+        .stats-content small { font-weight: 400; opacity: 0.8; font-size: 0.85rem;}
     </style>
 </head>
 <body>
+    <header class="header">
+        <h1>Книга Рецептів</h1>
+    </header>
+
     <div class="container">
-        <h1>Моя Кулінарна Книга</h1>
+        
+        <aside class="form-panel">
+            <h2>Додати рецепт</h2>
+            <?php if ($successMessage): ?>
+                <div class="success-alert"><?= $successMessage ?></div>
+            <?php endif; ?>
 
-        <?php if ($successMessage): ?>
-            <div class="success-alert"><?= $successMessage ?></div>
-        <?php endif; ?>
+            <form method="POST" action="index.php">
+                <div class="form-group">
+                    <label>Назва страви</label>
+                    <input type="text" name="title" required placeholder="Наприклад: Сирники" value="<?= htmlspecialchars($newTitle ?? '') ?>">
+                </div>
+                <div class="form-group">
+                    <label>Час приготування (хв)</label>
+                    <input type="number" name="cookTimeMin" min="1" required placeholder="20" value="<?= htmlspecialchars((string)($newCookTime ?? '')) ?>">
+                </div>
+                <div class="form-group">
+                    <label>Інгредієнти (через кому)</label>
+                    <textarea name="ingredients" rows="3" required placeholder="Сир, яйця, борошно..."><?= htmlspecialchars($newIngredientsStr ?? '') ?></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-group">
+                        <input type="checkbox" name="is_vegan" id="veganCheck"> 
+                        Веганська альтернатива
+                    </label>
+                </div>
+                <div class="form-group" id="subsGroup" style="display: none;">
+                    <label>Замінники тваринних продуктів</label>
+                    <input type="text" name="substitutions" placeholder="Тофу замість сиру" value="<?= htmlspecialchars($substitutions ?? '') ?>">
+                </div>
+                <button type="submit">Зберегти рецепт</button>
+            </form>
+        </aside>
 
-        <h2>Додати новий рецепт</h2>
-        <form method="POST" action="index.php" id="recipeForm">
-            <div class="form-group">
-                <label>Назва рецепта:</label>
-                <!-- Підставляємо введені дані назад у форму[cite: 2] -->
-                <input type="text" name="title" id="title" required value="<?= htmlspecialchars($newTitle ?? '') ?>">
-                <?php if (isset($errors['title'])) echo "<span class='error-text'>{$errors['title']}</span>"; ?>
+        <main>
+            <h2 class="recipes-header">Колекція рецептів</h2>
+            <div class="recipes-grid">
+                <?php foreach ($cookbook->getAll() as $recipeObj): ?>
+                    <div class="recipe-card <?= ($recipeObj instanceof VeganRecipe) ? 'vegan-card' : '' ?>">
+                        <?= $recipeObj->getInfo() ?> 
+                    </div>
+                <?php endforeach; ?>
             </div>
+        </main>
 
-            <div class="form-group">
-                <label>Час приготування (хв):</label>
-                <!-- HTML5 валідація[cite: 2] -->
-                <input type="number" name="cookTimeMin" id="cookTimeMin" min="1" required value="<?= htmlspecialchars((string)($newCookTime ?? '')) ?>">
-                <?php if (isset($errors['cookTimeMin'])) echo "<span class='error-text'>{$errors['cookTimeMin']}</span>"; ?>
+        <div class="stats-panel">
+            <h3>Найшвидший рецепт</h3>
+            <div class="stats-content">
+                <?php $fastest = $cookbook->shortestCookTime(); ?>
+                <?= $fastest ? $fastest->getInfo() : 'Немає збережених рецептів' ?> 
             </div>
-
-            <div class="form-group">
-                <label>Одиниця виміру:</label>
-                <select name="unit" id="unitSelect">
-                    <option value="g">Грами (g)</option>
-                    <option value="oz">Унції (oz)</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Інгредієнти:</label>
-                <textarea name="ingredients" id="ingredients" rows="3" required><?= htmlspecialchars($newIngredients ?? '') ?></textarea>
-                <?php if (isset($errors['ingredients'])) echo "<span class='error-text'>{$errors['ingredients']}</span>"; ?>
-            </div>
-
-            <button type="submit">Зберегти рецепт</button>
-        </form>
-
-        <hr style="margin: 30px 0; border: 0; border-top: 1px solid #ccc;">
-
-        <h2>Існуючі рецепти</h2>
-        <?php foreach ($recipes as $recipe): ?>
-            <?php $isFast = $recipe['cookTimeMin'] <= 20; ?>
-            <div class="recipe-card">
-                <b><?= htmlspecialchars($recipe['title']) ?></b>
-                <span style="color: #666; font-size: 0.9em;">(Порцій: <?= $recipe['servings'] ?>, Складність: <?= $recipe['difficulty'] ?>)</span>
-                <br>
-                Час приготування: <?= $recipe['cookTimeMin'] ?> хв.
-                <?php if ($isFast): ?>
-                    <span class="badge">Швидкий рецепт</span>
-                <?php endif; ?>
-            </div>
-        <?php endforeach; ?>
-
-        <div class="aggregate">
-            Середній час: <?= $averageTime ?> хв.
         </div>
+
     </div>
 
-    <!-- Клієнтська валідація та localStorage[cite: 2] -->
     <script>
-        const unitSelect = document.getElementById('unitSelect');
-        const form = document.getElementById('recipeForm');
-
-        // Відновлення налаштувань із localStorage[cite: 2]
-        const savedUnit = localStorage.getItem('preferredUnit');
-        if (savedUnit) unitSelect.value = savedUnit;
-
-        // Збереження в localStorage при зміні[cite: 2]
-        unitSelect.addEventListener('change', () => {
-            localStorage.setItem('preferredUnit', unitSelect.value);
-        });
-
-        // JavaScript валідація перед відправкою[cite: 2]
-        form.addEventListener('submit', (event) => {
-            const cookTime = parseInt(document.getElementById('cookTimeMin').value, 10);
-            const ingredients = document.getElementById('ingredients').value.trim();
-
-            if (cookTime <= 0 || ingredients === '') {
-                alert('Перевірте правильність заповнення полів (час > 0, інгредієнти не порожні)!');
-                event.preventDefault(); // Зупиняємо відправку[cite: 2]
-            }
+        const veganCheck = document.getElementById('veganCheck');
+        const subsGroup = document.getElementById('subsGroup');
+        
+        veganCheck.addEventListener('change', function() {
+            subsGroup.style.display = this.checked ? 'block' : 'none';
         });
     </script>
 </body>
