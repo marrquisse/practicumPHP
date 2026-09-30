@@ -1,39 +1,51 @@
 <?php
-// classes/Cookbook.php
 
 class Cookbook {
-    private array $recipes = [];
+    private PDO $pdo;
 
-    public function addRecipe(Recipe $recipe): void {
-        $this->recipes[] = $recipe;
+    public function __construct(PDO $pdo) {
+        $this->pdo = $pdo;
+    }
+
+    public function addRecipe(string $title, string $ingredients, int $cookTimeMin): void {
+        $stmt = $this->pdo->prepare('INSERT INTO recipes (title, ingredients, cook_time_min) VALUES (:title, :ingredients, :time)');
+        $stmt->execute([
+            ':title' => $title,
+            ':ingredients' => $ingredients,
+            ':time' => $cookTimeMin
+        ]);
+    }
+
+    public function updateRecipe(int $id, string $title, string $ingredients, int $cookTimeMin): void {
+        $stmt = $this->pdo->prepare('UPDATE recipes SET title = :title, ingredients = :ingredients, cook_time_min = :time WHERE id = :id');
+        $stmt->execute([
+            ':id' => $id,
+            ':title' => $title,
+            ':ingredients' => $ingredients,
+            ':time' => $cookTimeMin
+        ]);
+    }
+
+    public function deleteRecipe(int $id): void {
+        $stmt = $this->pdo->prepare('DELETE FROM recipes WHERE id = :id');
+        $stmt->execute([':id' => $id]);
     }
 
     public function getAll(): array {
-        return $this->recipes;
+        return $this->pdo->query('SELECT * FROM recipes ORDER BY id DESC')->fetchAll();
     }
 
-    public function findByIngredient(string $search): array {
-        $found = [];
-        foreach ($this->recipes as $recipe) {
-            foreach ($recipe->getIngredients() as $ingredient) {
-                if (stripos(trim($ingredient), $search) !== false) {
-                    $found[] = $recipe;
-                    break;
-                }
-            }
-        }
-        return $found;
+    public function getById(int $id): ?array {
+        $stmt = $this->pdo->prepare('SELECT * FROM recipes WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+        $res = $stmt->fetch();
+        return $res ?: null;
     }
 
-    public function shortestCookTime(): ?Recipe {
-        if (empty($this->recipes)) return null;
-        
-        $shortest = $this->recipes[0];
-        foreach ($this->recipes as $recipe) {
-            if ($recipe->getCookTimeMin() < $shortest->getCookTimeMin()) {
-                $shortest = $recipe;
-            }
-        }
-        return $shortest;
+    public function shortestCookTime(): ?array {
+        $stmt = $this->pdo->query('SELECT * FROM recipes ORDER BY cook_time_min ASC LIMIT 1');
+        $res = $stmt->fetch();
+        return $res ?: null;
     }
 }
+?>
