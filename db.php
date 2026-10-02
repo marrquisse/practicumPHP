@@ -1,7 +1,7 @@
 <?php
 $dsn = 'mysql:host=localhost;dbname=practicum4;charset=utf8mb4';
 $user = 'root'; 
-$pass = '8808';     
+$pass = ''; 
 
 $options = [
     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -11,6 +11,6 @@ $options = [
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (PDOException $e) {
-    die("Помилка підключення до бази даних. Перевірте, чи запущено MySQL. Деталі: " . $e->getMessage());
+    die("Помилка підключення до бази даних. Деталі: " . $e->getMessage());
 }
 ?>

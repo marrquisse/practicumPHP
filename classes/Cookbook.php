@@ -9,21 +9,12 @@ class Cookbook {
 
     public function addRecipe(string $title, string $ingredients, int $cookTimeMin): void {
         $stmt = $this->pdo->prepare('INSERT INTO recipes (title, ingredients, cook_time_min) VALUES (:title, :ingredients, :time)');
-        $stmt->execute([
-            ':title' => $title,
-            ':ingredients' => $ingredients,
-            ':time' => $cookTimeMin
-        ]);
+        $stmt->execute([':title' => $title, ':ingredients' => $ingredients, ':time' => $cookTimeMin]);
     }
 
     public function updateRecipe(int $id, string $title, string $ingredients, int $cookTimeMin): void {
         $stmt = $this->pdo->prepare('UPDATE recipes SET title = :title, ingredients = :ingredients, cook_time_min = :time WHERE id = :id');
-        $stmt->execute([
-            ':id' => $id,
-            ':title' => $title,
-            ':ingredients' => $ingredients,
-            ':time' => $cookTimeMin
-        ]);
+        $stmt->execute([':id' => $id, ':title' => $title, ':ingredients' => $ingredients, ':time' => $cookTimeMin]);
     }
 
     public function deleteRecipe(int $id): void {
@@ -40,6 +31,12 @@ class Cookbook {
         $stmt->execute([':id' => $id]);
         $res = $stmt->fetch();
         return $res ?: null;
+    }
+
+    public function findByIngredient(string $text): array {
+        $stmt = $this->pdo->prepare('SELECT * FROM recipes WHERE ingredients LIKE :pattern');
+        $stmt->execute([':pattern' => '%' . $text . '%']);
+        return $stmt->fetchAll();
     }
 
     public function shortestCookTime(): ?array {
