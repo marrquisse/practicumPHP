@@ -5,6 +5,8 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 
+$profileStart = microtime(true);
+
 function sendJson(
     bool $success,
     mixed $data = null,
@@ -12,6 +14,15 @@ function sendJson(
     int $statusCode = 200
 ): void {
     http_response_code($statusCode);
+
+    $elapsedMs = (microtime(true) - $GLOBALS['profileStart']) * 1000;
+    $peakMemoryMb = memory_get_peak_usage(true) / 1024 / 1024;
+
+    error_log(sprintf(
+        'API profile: time=%.2f ms, memory=%.2f MB',
+        $elapsedMs,
+        $peakMemoryMb
+    ));
 
     $response = [
         'success' => $success
@@ -62,6 +73,7 @@ try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     $resource = trim((string) ($_GET['resource'] ?? ''));
     $action = trim((string) ($_GET['action'] ?? ''));
+    $mode = trim((string) ($_GET['mode'] ?? ''));
 
     if ($resource === '') {
         sendJson(
@@ -82,51 +94,10 @@ try {
     }
 
 
-    if ($method === 'GET') {
-        if ($action !== '') {
-            sendJson(
-                false,
-                null,
-                'Параметр action не підтримується для GET-запиту.',
-                400
-            );
-        }
+if ($method === 'GET') {
 
-        if (!isset($_GET['id'])) {
-            $recipes = $cookbook->getAll();
-
-            sendJson(
-                true,
-                $recipes,
-                null,
-                200
-            );
-        }
-
-        $id = filter_var(
-            $_GET['id'],
-            FILTER_VALIDATE_INT
-        );
-
-        if ($id === false || $id <= 0) {
-            sendJson(
-                false,
-                null,
-                'Параметр id повинен бути додатним цілим числом.',
-                400
-            );
-        }
-
-        $recipe = $cookbook->getById($id);
-
-        if ($recipe === null) {
-            sendJson(
-                false,
-                null,
-                'Рецепт не знайдено.',
-                404
-            );
-        }
+    if ($action === 'shortest') {
+        $recipe = $cookbook->shortestCookTimeCached(60);
 
         sendJson(
             true,
@@ -136,6 +107,72 @@ try {
         );
     }
 
+    if ($action !== '') {
+        sendJson(
+            false,
+            null,
+            'Параметр action не підтримується для GET-запиту.',
+            400
+        );
+    }
+
+    if (!isset($_GET['id'])) {
+
+        if ($mode === 'nplus1') {
+
+            $recipes =
+                $cookbook->getAllWithIngredientCountNPlusOne();
+
+        } elseif ($mode === 'optimized') {
+
+            $recipes =
+                $cookbook->getAllWithIngredientCountOptimized();
+
+        } else {
+
+            $recipes = $cookbook->getAll();
+        }
+
+        sendJson(
+            true,
+            $recipes,
+            null,
+            200
+        );
+    }
+
+    $id = filter_var(
+        $_GET['id'],
+        FILTER_VALIDATE_INT
+    );
+
+    if ($id === false || $id <= 0) {
+        sendJson(
+            false,
+            null,
+            'Параметр id повинен бути додатним цілим числом.',
+            400
+        );
+    }
+
+    $recipe = $cookbook->getById($id);
+
+    if ($recipe === null) {
+        sendJson(
+            false,
+            null,
+            'Рецепт не знайдено.',
+            404
+        );
+    }
+
+    sendJson(
+        true,
+        $recipe,
+        null,
+        200
+    );
+}
 
     if ($method === 'POST') {
         $input = getJsonBody();
