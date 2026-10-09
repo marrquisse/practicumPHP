@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-$dsn = 'mysql:host=localhost;dbname=practicum4;charset=utf8mb4';
+$dsn = 'mysql:host=127.0.0.1;port=3306;dbname=practicum4;charset=utf8mb4';
 $user = 'root';
 $pass = '';
 
@@ -13,12 +13,20 @@ $options = [
 ];
 
 try {
-    $pdo = new PDO($dsn, $user, $pass, $options);
+    $pdo = new PDO(
+        $dsn,
+        $user,
+        $pass,
+        $options
+    );
 } catch (PDOException $e) {
 
-    error_log('Database connection error: ' . $e->getMessage());
+    error_log(
+        'Database connection error: '
+        . $e->getMessage()
+    );
 
-    http_response_code(500);
-
-    throw new RuntimeException('Не вдалося підключитися до бази даних.');
+    throw new RuntimeException(
+        'Не вдалося підключитися до бази даних.'
+    );
 }

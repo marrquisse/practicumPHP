@@ -4,46 +4,67 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 
-function sendJson(array $data, int $statusCode = 200): void
-{
-    http_response_code($statusCode);
+require_once __DIR__ . '/lib/security.php';
 
-    echo json_encode(
-        $data,
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-    );
-
-    exit;
-}
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Allow: POST');
+    http_response_code(405);
 
-    sendJson([
+    echo json_encode([
         'success' => false,
         'error' => 'Метод не підтримується.'
-    ], 405);
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
 }
 
 try {
     require_once __DIR__ . '/db.php';
     require_once __DIR__ . '/classes/Cookbook.php';
 
-    $rawInput = file_get_contents('php://input');
-    $input = json_decode($rawInput, true);
+    $rawBody = file_get_contents('php://input');
+
+    $input = json_decode(
+        $rawBody ?: '',
+        true
+    );
 
     if (!is_array($input)) {
-        sendJson([
+        http_response_code(400);
+
+        echo json_encode([
             'success' => false,
             'error' => 'Некоректне JSON-тіло запиту.'
-        ], 400);
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
     }
 
-    $id = isset($input['id'])
-        ? filter_var($input['id'], FILTER_VALIDATE_INT)
-        : 0;
+    $csrf = getRequestCsrfToken($input);
 
-    $title = trim((string) ($input['title'] ?? ''));
-    $ingredients = trim((string) ($input['ingredients'] ?? ''));
+    if (!isValidCsrfToken($csrf)) {
+        http_response_code(403);
+
+        echo json_encode([
+            'success' => false,
+            'error' => 'Недійсний CSRF-токен.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
+    }
+
+    $id = filter_var(
+        $input['id'] ?? 0,
+        FILTER_VALIDATE_INT
+    );
+
+    $title = trim(
+        (string) ($input['title'] ?? '')
+    );
+
+    $ingredients = trim(
+        (string) ($input['ingredients'] ?? '')
+    );
 
     $cookTime = filter_var(
         $input['cookTimeMin'] ?? null,
@@ -51,49 +72,77 @@ try {
     );
 
     if ($title === '') {
-        sendJson([
+        http_response_code(400);
+
+        echo json_encode([
             'success' => false,
-            'error' => 'Поле "Назва страви" є обов\'язковим.'
-        ], 400);
+            'error' => 'Назва рецепта є обов’язковою.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
+    }
+
+    if (mb_strlen($title) > 255) {
+        http_response_code(400);
+
+        echo json_encode([
+            'success' => false,
+            'error' => 'Назва рецепта занадто довга.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
     }
 
     if ($ingredients === '') {
-        sendJson([
+        http_response_code(400);
+
+        echo json_encode([
             'success' => false,
-            'error' => 'Поле "Інгредієнти" є обов\'язковим.'
-        ], 400);
+            'error' => 'Інгредієнти є обов’язковими.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
     }
 
     if ($cookTime === false || $cookTime <= 0) {
-        sendJson([
+        http_response_code(400);
+
+        echo json_encode([
             'success' => false,
-            'error' => 'Час приготування повинен бути цілим числом більше 0.'
-        ], 400);
+            'error' => 'Час приготування повинен бути додатним цілим числом.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
     }
 
     $cookbook = new Cookbook($pdo);
 
     if ($id !== false && $id > 0) {
-        $existingRecipe = $cookbook->getById($id);
 
-        if ($existingRecipe === null) {
-            sendJson([
-                'success' => false,
-                'error' => 'Рецепт не знайдено.'
-            ], 404);
-        }
-
-        $cookbook->updateRecipe(
+        $updated = $cookbook->updateRecipe(
             $id,
             $title,
             $ingredients,
             $cookTime
         );
 
-        sendJson([
+        if (!$updated && $cookbook->getById($id) === null) {
+            http_response_code(404);
+
+            echo json_encode([
+                'success' => false,
+                'error' => 'Рецепт не знайдено.'
+            ], JSON_UNESCAPED_UNICODE);
+
+            exit;
+        }
+
+        echo json_encode([
             'success' => true,
-            'message' => 'Рецепт успішно оновлено!'
-        ]);
+            'message' => 'Рецепт успішно оновлено.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
     }
 
     $newId = $cookbook->addRecipe(
@@ -102,22 +151,25 @@ try {
         $cookTime
     );
 
-    sendJson([
+    http_response_code(201);
+
+    echo json_encode([
         'success' => true,
-        'message' => 'Рецепт успішно додано!',
-        'data' => [
-            'id' => $newId,
-            'title' => $title,
-            'ingredients' => $ingredients,
-            'cook_time_min' => $cookTime
-        ]
-    ], 201);
+        'message' => 'Рецепт успішно додано.',
+        'data' => $cookbook->getById($newId)
+    ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-    error_log('api_add.php error: ' . $e->getMessage());
 
-    sendJson([
+    error_log(
+        'api_add.php error: '
+        . $e->getMessage()
+    );
+
+    http_response_code(500);
+
+    echo json_encode([
         'success' => false,
         'error' => 'Внутрішня помилка сервера.'
-    ], 500);
+    ], JSON_UNESCAPED_UNICODE);
 }

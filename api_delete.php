@@ -4,41 +4,53 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 
-function sendJson(array $data, int $statusCode = 200): never
-{
-    http_response_code($statusCode);
-
-    echo json_encode(
-        $data,
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-    );
-
-    exit;
-}
+require_once __DIR__ . '/lib/security.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Allow: POST');
+    http_response_code(405);
 
-    sendJson([
+    echo json_encode([
         'success' => false,
         'error' => 'Метод не підтримується.'
-    ], 405);
+    ], JSON_UNESCAPED_UNICODE);
+
+    exit;
 }
 
 try {
     require_once __DIR__ . '/db.php';
     require_once __DIR__ . '/classes/Cookbook.php';
 
+    $rawBody = file_get_contents('php://input');
+
     $input = json_decode(
-        file_get_contents('php://input'),
+        $rawBody ?: '',
         true
     );
 
     if (!is_array($input)) {
-        sendJson([
+        http_response_code(400);
+
+        echo json_encode([
             'success' => false,
             'error' => 'Некоректне JSON-тіло запиту.'
-        ], 400);
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
+    }
+
+    $csrf = getRequestCsrfToken($input);
+
+    if (!isValidCsrfToken($csrf)) {
+        http_response_code(403);
+
+        echo json_encode([
+            'success' => false,
+            'error' => 'Недійсний CSRF-токен.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
     }
 
     $id = filter_var(
@@ -47,33 +59,45 @@ try {
     );
 
     if ($id === false || $id <= 0) {
-        sendJson([
+        http_response_code(400);
+
+        echo json_encode([
             'success' => false,
-            'error' => 'Некоректний ID рецепта.'
-        ], 400);
+            'error' => 'Некоректний ID.'
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
     }
 
     $cookbook = new Cookbook($pdo);
 
-    if ($cookbook->getById($id) === null) {
-        sendJson([
+    if (!$cookbook->deleteRecipe($id)) {
+        http_response_code(404);
+
+        echo json_encode([
             'success' => false,
             'error' => 'Рецепт не знайдено.'
-        ], 404);
+        ], JSON_UNESCAPED_UNICODE);
+
+        exit;
     }
 
-    $cookbook->deleteRecipe($id);
-
-    sendJson([
+    echo json_encode([
         'success' => true,
-        'message' => 'Рецепт успішно видалено.'
-    ]);
+        'message' => 'Рецепт видалено.'
+    ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-    error_log('api_delete.php error: ' . $e->getMessage());
 
-    sendJson([
+    error_log(
+        'api_delete.php error: '
+        . $e->getMessage()
+    );
+
+    http_response_code(500);
+
+    echo json_encode([
         'success' => false,
         'error' => 'Внутрішня помилка сервера.'
-    ], 500);
+    ], JSON_UNESCAPED_UNICODE);
 }

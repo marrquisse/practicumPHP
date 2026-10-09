@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-
 header('Content-Type: application/json; charset=utf-8');
+
+require_once __DIR__ . '/lib/security.php';
 
 $profileStart = microtime(true);
 
@@ -12,7 +13,7 @@ function sendJson(
     mixed $data = null,
     ?string $error = null,
     int $statusCode = 200
-): void {
+): never {
     http_response_code($statusCode);
 
     $elapsedMs = (microtime(true) - $GLOBALS['profileStart']) * 1000;
@@ -93,11 +94,94 @@ try {
         );
     }
 
+    if ($method === 'GET') {
 
-if ($method === 'GET') {
+        if ($action === 'csrf') {
+            sendJson(
+                true,
+                [
+                    'csrf_token' => csrfToken()
+                ],
+                null,
+                200
+            );
+        }
 
-    if ($action === 'shortest') {
-        $recipe = $cookbook->shortestCookTimeCached(60);
+        if ($action === 'shortest') {
+            $recipe = $cookbook->shortestCookTimeCached(60);
+
+            sendJson(
+                true,
+                $recipe,
+                null,
+                200
+            );
+        }
+
+        if ($action !== '') {
+            sendJson(
+                false,
+                null,
+                'Параметр action не підтримується для GET-запиту.',
+                400
+            );
+        }
+
+        if (!isset($_GET['id'])) {
+
+            if ($mode === 'nplus1') {
+                $recipes =
+                    $cookbook->getAllWithIngredientCountNPlusOne();
+
+            } elseif ($mode === 'optimized') {
+                $recipes =
+                    $cookbook->getAllWithIngredientCountOptimized();
+
+            } elseif ($mode === '') {
+                $recipes = $cookbook->getAll();
+
+            } else {
+                sendJson(
+                    false,
+                    null,
+                    'Невідомий режим.',
+                    400
+                );
+            }
+
+            sendJson(
+                true,
+                $recipes,
+                null,
+                200
+            );
+        }
+
+
+        $id = filter_var(
+            $_GET['id'],
+            FILTER_VALIDATE_INT
+        );
+
+        if ($id === false || $id <= 0) {
+            sendJson(
+                false,
+                null,
+                'Параметр id повинен бути додатним цілим числом.',
+                400
+            );
+        }
+
+        $recipe = $cookbook->getById($id);
+
+        if ($recipe === null) {
+            sendJson(
+                false,
+                null,
+                'Рецепт не знайдено.',
+                404
+            );
+        }
 
         sendJson(
             true,
@@ -107,77 +191,20 @@ if ($method === 'GET') {
         );
     }
 
-    if ($action !== '') {
-        sendJson(
-            false,
-            null,
-            'Параметр action не підтримується для GET-запиту.',
-            400
-        );
-    }
-
-    if (!isset($_GET['id'])) {
-
-        if ($mode === 'nplus1') {
-
-            $recipes =
-                $cookbook->getAllWithIngredientCountNPlusOne();
-
-        } elseif ($mode === 'optimized') {
-
-            $recipes =
-                $cookbook->getAllWithIngredientCountOptimized();
-
-        } else {
-
-            $recipes = $cookbook->getAll();
-        }
-
-        sendJson(
-            true,
-            $recipes,
-            null,
-            200
-        );
-    }
-
-    $id = filter_var(
-        $_GET['id'],
-        FILTER_VALIDATE_INT
-    );
-
-    if ($id === false || $id <= 0) {
-        sendJson(
-            false,
-            null,
-            'Параметр id повинен бути додатним цілим числом.',
-            400
-        );
-    }
-
-    $recipe = $cookbook->getById($id);
-
-    if ($recipe === null) {
-        sendJson(
-            false,
-            null,
-            'Рецепт не знайдено.',
-            404
-        );
-    }
-
-    sendJson(
-        true,
-        $recipe,
-        null,
-        200
-    );
-}
 
     if ($method === 'POST') {
         $input = getJsonBody();
 
+        $csrfToken = getRequestCsrfToken($input);
 
+        if (!isValidCsrfToken($csrfToken)) {
+            sendJson(
+                false,
+                null,
+                'Недійсний CSRF-токен.',
+                403
+            );
+        }
 
         if ($action === 'search') {
             $maxCookTime = filter_var(
@@ -185,7 +212,10 @@ if ($method === 'GET') {
                 FILTER_VALIDATE_INT
             );
 
-            if ($maxCookTime === false || $maxCookTime <= 0) {
+            if (
+                $maxCookTime === false
+                || $maxCookTime <= 0
+            ) {
                 sendJson(
                     false,
                     null,
@@ -206,7 +236,6 @@ if ($method === 'GET') {
             );
         }
 
-    
         if ($action !== '') {
             sendJson(
                 false,
@@ -256,7 +285,19 @@ if ($method === 'GET') {
             );
         }
 
-        if ($cookTime === false || $cookTime <= 0) {
+        if (mb_strlen($ingredients) > 5000) {
+            sendJson(
+                false,
+                null,
+                'Поле ingredients занадто довге.',
+                400
+            );
+        }
+
+        if (
+            $cookTime === false
+            || $cookTime <= 0
+        ) {
             sendJson(
                 false,
                 null,
@@ -293,7 +334,11 @@ if ($method === 'GET') {
 
 } catch (Throwable $e) {
 
-    error_log('api.php error: ' . $e->getMessage());
+    error_log(
+        'api.php error: '
+        . $e->getMessage()
+    );
+
 
     sendJson(
         false,
